@@ -93,7 +93,9 @@ pub struct SHRParser {
 /// Enumeration representing the scale used in the SHR file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 enum SHRScale {
+    #[serde(rename = "dBm")]
     Dbm = 0,
+    #[serde(rename = "mV")]
     MV = 1,
 }
 
@@ -187,6 +189,17 @@ impl TryFrom<i32> for SHRParsingType {
             1 => Ok(SHRParsingType::Mean),
             2 => Ok(SHRParsingType::Low),
             _ => Err("Invalid value for SHRParsingType"),
+        }
+    }
+}
+
+/// Implementation for displaying SHRParsingType enumeration values.
+impl fmt::Display for SHRParsingType {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SHRParsingType::Peak => write!(formatter, "SHRParsingType.Peak"),
+            SHRParsingType::Mean => write!(formatter, "SHRParsingType.Mean"),
+            SHRParsingType::Low => write!(formatter, "SHRParsingType.Low"),
         }
     }
 }

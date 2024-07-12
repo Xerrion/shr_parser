@@ -3,11 +3,10 @@ cargo-features = ["profile-rustflags"]
 [package]
 name = "shr_parser"
 description = "Parses sweeps from a Signal Hound Spike file."
-version = "1.0.5"
+version = "1.0.6"
 edition = "2021"
 categories = ["parser-implementations", "parsing", "science", "data-structures"]
 license = "GPL-3.0-only"
-license-file = "LICENSE"
 authors = ["Lasse Nielsen <lasse@xerrion.dk>"]
 readme = "README.md"
 documentation = "https://docs.rs/shr_parser"
