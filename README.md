@@ -19,7 +19,7 @@ To include this library in your project, add the following dependencies to your 
 
 ```toml
 [dependencies]
-shr_parser = "1.0.2"
+shr_parser = "1.0.4"
 ```
 
 ## Usage
@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Documentation
 
-Complete documentation is available on [docs.rs](https://docs.rs/shr_parser/1.0.2/shr_parser/). To generate the
+Complete documentation is available on [docs.rs](https://docs.rs/shr_parser/). To generate the
 documentation locally, run:
 
 ```sh

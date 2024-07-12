@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "shr_parser"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "byteorder",
  "memmap",
