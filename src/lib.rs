@@ -128,6 +128,20 @@ pub enum SHRFileError {
     InvalidFile,
 }
 
+pub struct BasicHeaderInfo {
+    pub min_freq: f64,
+    pub max_freq: f64,
+    pub ref_scale: &'static str,
+    pub sweep_count: u32,
+    pub sweep_length: u32,
+    pub first_bin_freq_hz: f64,
+    pub bin_size_hz: f64,
+    pub center_freq_hz: f64,
+    pub span_hz: f64,
+    pub rbw_hz: f64,
+    pub ref_level: f32,
+}
+
 /// Implementation for converting integer values to SHRScale enumeration values.
 impl TryFrom<i32> for SHRScale {
     type Error = &'static str;
@@ -312,10 +326,9 @@ impl SHRFileHeader {
     ///
     /// A result indicating whether the version is valid.
     fn validate_version(&self) -> Result<(), SHRFileError> {
-        if self.version != Self::EXPECTED_VERSION_1 && self.version != Self::EXPECTED_VERSION_2 {
-            Err(SHRFileError::InvalidVersion)
-        } else {
-            Ok(())
+        match self.version {
+            Self::EXPECTED_VERSION_1 | Self::EXPECTED_VERSION_2 => Ok(()),
+            _ => Err(SHRFileError::InvalidVersion),
         }
     }
 
@@ -385,33 +398,24 @@ impl SHRFileHeader {
     ///
     /// # Returns
     ///
-    /// A string containing the basic file header information.
-    fn get_basic_file_header_info(&self) -> String {
+    /// A vector containing the basic file header information.
+    fn get_basic_header_info(&self) -> BasicHeaderInfo {
         let min_freq = (self.center_freq_hz - self.span_hz / 2.0) * 1e-6;
         let max_freq = (self.center_freq_hz + self.span_hz / 2.0) * 1e-6;
         let ref_scale = self.get_ref_scale();
-        format!(
-            "#Sweep count: {}\n\
-             #Sweep size: {}\n\
-             #Sweep Start Freq: {}\n\
-             #Sweep Bin Size: {}\n\
-             #Sweep Center Freq: {}\n\
-             #Sweep Span Freq: {}\n\
-             #Sweep Freq Range: {} MHz to {} MHz\n\
-             #RWB: {} kHz\n\
-             #Reference Level: {} {}\n",
-            self.sweep_count,
-            self.sweep_length,
-            self.first_bin_freq_hz,
-            self.bin_size_hz,
-            self.center_freq_hz,
-            self.span_hz,
+        BasicHeaderInfo {
             min_freq,
             max_freq,
-            self.rbw_hz * 1e-3, // Assuming rbw_hz is in Hz and converting to kHz
-            self.ref_level,
             ref_scale,
-        )
+            sweep_count: self.sweep_count,
+            sweep_length: self.sweep_length,
+            first_bin_freq_hz: self.first_bin_freq_hz,
+            bin_size_hz: self.bin_size_hz,
+            center_freq_hz: self.center_freq_hz,
+            span_hz: self.span_hz,
+            rbw_hz: self.rbw_hz,
+            ref_level: self.ref_level,
+        }
     }
 
     /// Returns a string representation of the decimation information.
@@ -456,6 +460,32 @@ impl SHRFileHeader {
             }
         };
         format!("{}#Was {}\n", decimation_info, channelized)
+    }
+
+    fn get_formatted_header_info(&self) -> String {
+        let basic_header_info = self.get_basic_header_info();
+        format!(
+            "#Sweep count: {}\n\
+             #Sweep size: {}\n\
+             #Sweep Start Freq: {}\n\
+             #Sweep Bin Size: {}\n\
+             #Sweep Center Freq: {}\n\
+             #Sweep Span Freq: {}\n\
+             #Sweep Freq Range: {} MHz to {} MHz\n\
+             #RBW: {} kHz\n\
+             #Reference Level: {} {}\n",
+            basic_header_info.sweep_count,
+            basic_header_info.sweep_length,
+            basic_header_info.first_bin_freq_hz,
+            basic_header_info.bin_size_hz,
+            basic_header_info.center_freq_hz,
+            basic_header_info.span_hz,
+            basic_header_info.min_freq,
+            basic_header_info.max_freq,
+            basic_header_info.rbw_hz,
+            basic_header_info.ref_level,
+            basic_header_info.ref_scale
+        )
     }
 }
 
@@ -586,9 +616,14 @@ impl SHRFile {
     ///
     /// A result indicating whether the file is valid.
     fn validate_file(&self) -> Result<(), SHRFileError> {
-        self.file_header.validate_signature()?;
-        self.file_header.validate_version()?;
-        Ok(())
+        let valid_signature = self.file_header.validate_signature();
+        let valid_version = self.file_header.validate_version();
+
+        if valid_signature.is_ok() && valid_version.is_ok() {
+            Ok(())
+        } else {
+            Err(SHRFileError::InvalidFile)
+        }
     }
 
     /// Parses the SHR file from a buffer.
@@ -609,9 +644,12 @@ impl SHRFile {
             sweeps: Vec::new(),
         };
 
-        shr_file.validate_file()?;
-        shr_file.parse_sweeps(buffer, parsing_type)?;
-        Ok(shr_file)
+        if shr_file.validate_file().is_ok() {
+            shr_file.parse_sweeps(buffer, parsing_type);
+            Ok(shr_file)
+        } else {
+            Err(SHRFileError::InvalidFile)
+        }
     }
 
     /// Calculates the size of a sweep in bytes.
@@ -688,12 +726,11 @@ impl SHRFile {
     /// # Returns
     ///
     /// A result indicating success or an error.
-    fn parse_sweeps(&mut self, buffer: &[u8], parsing_type: SHRParsingType) -> io::Result<()> {
+    fn parse_sweeps(&mut self, buffer: &[u8], parsing_type: SHRParsingType) {
         let sweep_count = self.file_header.sweep_count as usize;
         let sweep_length = self.file_header.sweep_length as usize;
         let data_offset = self.file_header.data_offset;
         let sweep_size_in_bytes = Self::calculate_sweep_size_in_bytes(sweep_length);
-
         let buffer = Arc::new(buffer.to_vec());
 
         self.sweeps = (0..sweep_count)
@@ -705,6 +742,7 @@ impl SHRFile {
 
                 let sweep_header = Self::read_sweep_header(&mut cursor).unwrap();
                 let sweep_data = Self::read_sweep_data(&mut cursor, sweep_length).unwrap();
+                drop(cursor);
 
                 SHRSweep::new(
                     i as i32,
@@ -717,7 +755,8 @@ impl SHRFile {
             })
             .collect();
 
-        Ok(())
+        // Drop the buffer to free the memory
+        drop(buffer);
     }
 }
 
@@ -741,26 +780,19 @@ impl SHRParser {
         })
     }
 
-    /// Returns the file path as a string.
-    ///
-    /// # Returns
-    ///
-    /// A string containing the file path.
-    fn get_file_path(&self) -> String {
-        format!("#File name: {}\n", self.file_path.display())
-    }
-
     /// Returns the file information as a string.
     ///
     /// # Returns
     ///
     /// A string containing the file information.
-    fn get_file_info(&self) -> String {
+    fn get_csv_header(&self) -> String {
+        let file_name_display = format!("#File name: {}\n", self.file_path.display());
+        let decimation_info = self.shr_file.file_header.get_decimation_info();
+        let basic_header_display = self.shr_file.file_header.get_formatted_header_info();
+
         format!(
             "{}{}{}",
-            self.get_file_path(),
-            self.shr_file.file_header.get_basic_file_header_info(),
-            self.shr_file.file_header.get_decimation_info()
+            file_name_display, basic_header_display, decimation_info
         )
     }
 
@@ -773,7 +805,7 @@ impl SHRParser {
         let header_info = vec![
             self.shr_file.file_header.get_signature(),
             self.shr_file.file_header.get_version(),
-            self.get_file_info(),
+            self.get_csv_header(),
         ];
 
         let sweep_info: Vec<String> = self
@@ -811,5 +843,86 @@ impl SHRParser {
         let mut csv_file = File::create(path)?;
         csv_file.write_all(csv_data.as_bytes())?;
         Ok(())
+    }
+
+    pub fn get_sweeps(&self) -> Vec<SHRSweep> {
+        self.shr_file.sweeps.clone()
+    }
+
+    pub fn get_file_header(&self) -> SHRFileHeader {
+        self.shr_file.file_header.clone()
+    }
+
+    pub fn get_file_path(&self) -> PathBuf {
+        self.file_path.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn sweeps_returned_successfully_for_valid_shr_file() {
+        let parser = SHRParser::new(
+            PathBuf::from("Raster2024-07-11 09h16m38s.shr"),
+            SHRParsingType::Peak,
+        )
+        .unwrap();
+        let sweeps = parser.get_sweeps();
+        let header = parser.get_file_header();
+        let file_path = parser.get_file_path();
+
+        println!("{:?}", header);
+        println!("{:?}", file_path);
+
+        parser.to_csv(PathBuf::from("output.csv")).unwrap();
+
+        assert!(
+            !sweeps.is_empty(),
+            "Sweeps should not be empty for a valid SHR file"
+        );
+    }
+
+    #[test]
+    fn sweeps_return_empty_for_shr_file_with_no_sweeps() {
+        let parser = SHRParser::new(PathBuf::from("no_sweeps.shr"), SHRParsingType::Peak).unwrap();
+        let sweeps = parser.get_sweeps();
+        assert!(
+            sweeps.is_empty(),
+            "Sweeps should be empty for an SHR file with no sweeps"
+        );
+    }
+
+    #[test]
+    fn sweeps_return_correct_number_of_sweeps() {
+        let parser =
+            SHRParser::new(PathBuf::from("multiple_sweeps.shr"), SHRParsingType::Peak).unwrap();
+        let sweeps = parser.get_sweeps();
+        assert_eq!(
+            sweeps.len(),
+            5,
+            "Sweeps count should match the actual number of sweeps in the SHR file"
+        );
+    }
+
+    #[test]
+    fn sweeps_return_error_for_invalid_shr_file() {
+        let parser_result = SHRParser::new(PathBuf::from("invalid.shr"), SHRParsingType::Peak);
+        assert!(
+            parser_result.is_err(),
+            "Parser should return an error for an invalid SHR file"
+        );
+    }
+
+    #[test]
+    fn sweeps_return_error_for_nonexistent_shr_file() {
+        let parser_result = SHRParser::new(PathBuf::from("nonexistent.shr"), SHRParsingType::Peak);
+        assert!(
+            parser_result.is_err(),
+            "Parser should return an error for a nonexistent SHR file"
+        );
     }
 }
