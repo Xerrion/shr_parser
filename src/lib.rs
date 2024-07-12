@@ -193,17 +193,6 @@ impl TryFrom<i32> for SHRParsingType {
     }
 }
 
-/// Implementation for displaying SHRParsingType enumeration values.
-impl fmt::Display for SHRParsingType {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            SHRParsingType::Peak => write!(formatter, "SHRParsingType.Peak"),
-            SHRParsingType::Mean => write!(formatter, "SHRParsingType.Mean"),
-            SHRParsingType::Low => write!(formatter, "SHRParsingType.Low"),
-        }
-    }
-}
-
 /// Implementation for displaying SHRFileError enumeration values.
 impl fmt::Display for SHRFileError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
