@@ -19,7 +19,7 @@ To include this library in your project, add the following dependencies to your 
 
 ```toml
 [dependencies]
-shr_parser = "1.0.4"
+shr_parser = "1.0.5"
 ```
 
 ## Usage
