@@ -9,6 +9,8 @@ categories = ["parser-implementations", "parsing", "science", "data-structures"]
 license = "GPL-3.0-only"
 authors = ["Lasse Nielsen <lasse@xerrion.dk>"]
 readme = "README.md"
+documentation = "https://docs.rs/shr_parser"
+repository = "https://github.com/Xerrion/shr_parser"
 
 [dependencies]
 byteorder = "1.5.0"
