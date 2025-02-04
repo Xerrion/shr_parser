@@ -55,10 +55,10 @@ pub struct SHRFileHeader {
 /// Struct representing the header of a sweep within an SHR file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SHRSweepHeader {
-    timestamp: u64,
-    latitude: f64,
-    longitude: f64,
-    altitude: f64,
+    pub timestamp: u64,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub altitude: f64,
     adc_overflow: u8,
     reserved: [u8; 15],
 }
