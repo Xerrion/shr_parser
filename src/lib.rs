@@ -66,14 +66,10 @@ pub struct SHRSweepHeader {
 /// Struct representing a sweep within an SHR file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SHRSweep {
-    #[serde(rename = "Sweep")]
-    pub sweep_number: i32,
-    #[serde(rename = "Timestamp")]
-    pub timestamp: u64,
-    #[serde(rename = "Peak Freq MHz")]
+    pub number: i32,
     pub frequency: f64,
-    #[serde(rename = "Peak Ampl dBM")]
     pub amplitude: f64,
+    pub header: SHRSweepHeader,
 }
 
 /// Struct representing the entire SHR file, including its header and sweeps.
@@ -239,11 +235,15 @@ impl SHRSweep {
         );
 
         Self {
-            sweep_number,
-            timestamp: sweep_header.timestamp,
+            number: sweep_number,
+            header: sweep_header,
             frequency: out_freq,
             amplitude: out_power,
         }
+    }
+
+    pub fn get_header(&self) -> &SHRSweepHeader {
+        &self.header
     }
 
     /// Calculates metrics for a sweep based on the parsing type.
@@ -816,15 +816,20 @@ impl SHRParser {
             .iter()
             .map(|sweep| {
                 format!(
-                    "{},{},{},{}\n",
-                    sweep.sweep_number, sweep.timestamp, sweep.frequency, sweep.amplitude
+                    "{},{},{},{},{},{}\n",
+                    sweep.number,
+                    sweep.header.timestamp,
+                    sweep.frequency,
+                    sweep.amplitude,
+                    sweep.header.latitude,
+                    sweep.header.longitude,
                 )
             })
             .collect();
 
         let mut data_holder = header_info;
         data_holder.push(String::from(
-            "Sweep,Timestamp,Peak Freq MHz,Peak Ampl dBM\n",
+            "Sweep,Timestamp,Peak Freq MHz,Peak Ampl dBM,Latitude,Longitude\n",
         ));
         data_holder.extend(sweep_info);
 
@@ -868,11 +873,7 @@ mod tests {
 
     #[test]
     fn sweeps_returned_successfully_for_valid_shr_file() {
-        let parser = SHRParser::new(
-            PathBuf::from("Raster2024-07-11 09h16m38s.shr"),
-            SHRParsingType::Peak,
-        )
-        .unwrap();
+        let parser = SHRParser::new(PathBuf::from("sweep.shr"), SHRParsingType::Peak).unwrap();
         let sweeps = parser.get_sweeps();
         let header = parser.get_file_header();
         let file_path = parser.get_file_path();
