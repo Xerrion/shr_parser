@@ -3,7 +3,7 @@ cargo-features = ["profile-rustflags"]
 [package]
 name = "shr_parser"
 description = "Parses sweeps from a Signal Hound Spike file."
-version = "1.0.6"
+version = "1.0.7"
 edition = "2021"
 categories = ["parser-implementations", "parsing", "science", "data-structures"]
 license = "GPL-3.0-only"
@@ -15,10 +15,8 @@ repository = "https://github.com/Xerrion/shr_parser"
 [dependencies]
 byteorder = "1.5.0"
 serde = { version = "1.0.204", features = ["derive"] }
-ndarray = "0.15.6"
 rayon = "1.10.0"
 memmap = "0.7.0"
-
 
 [profile.release]
 lto = true          # Enable Link Time Optimization
