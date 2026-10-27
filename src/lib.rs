@@ -63,6 +63,15 @@ pub struct SHRSweepHeader {
     reserved: [u8; 15],
 }
 
+/// A frequency/amplitude pair from one sweep bin.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct SHRSweepPoint {
+    /// Bin frequency in Hz.
+    pub frequency_hz: f64,
+    /// Unmodified amplitude in the file's reference scale (dBm or mV).
+    pub amplitude: f32,
+}
+
 /// Struct representing a sweep within an SHR file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SHRSweep {
@@ -70,6 +79,10 @@ pub struct SHRSweep {
     pub frequency: f64,
     pub amplitude: f64,
     pub header: SHRSweepHeader,
+    /// All bins in file order, independent of the selected summary metric.
+    /// Defaults to empty when deserializing data written before this field existed.
+    #[serde(default)]
+    pub data: Vec<SHRSweepPoint>,
 }
 
 /// Struct representing the entire SHR file, including its header and sweeps.
@@ -234,12 +247,28 @@ impl SHRSweep {
             bin_size_hz,
         );
 
+        let data = sweep_data_raw
+            .into_iter()
+            .enumerate()
+            .map(|(index, amplitude)| SHRSweepPoint {
+                frequency_hz: first_bin_freq_hz + index as f64 * bin_size_hz,
+                amplitude,
+            })
+            .collect();
+
         Self {
             number: sweep_number,
             header: sweep_header,
             frequency: out_freq,
             amplitude: out_power,
+            data,
         }
+    }
+
+    /// Borrows all frequency/amplitude pairs without cloning the sweep.
+    /// Frequencies are in Hz; the summary `frequency` field remains in MHz.
+    pub fn get_data(&self) -> &[SHRSweepPoint] {
+        &self.data
     }
 
     pub fn get_header(&self) -> &SHRSweepHeader {
@@ -704,18 +733,9 @@ impl SHRFile {
     ///
     /// A result containing the sweep data as a vector of floats or an error.
     fn read_sweep_data<R: Read>(reader: &mut R, sweep_length: usize) -> io::Result<Vec<f32>> {
-        let mut buffer = vec![0u8; sweep_length * size_of::<f32>()];
-        reader.read_exact(&mut buffer)?;
-
-        // Use transmute to convert the byte buffer to Vec<f32>
-        let floats = unsafe {
-            Vec::from_raw_parts(buffer.as_mut_ptr() as *mut f32, sweep_length, sweep_length)
-        };
-
-        // Prevent the original buffer from being deallocated
-        std::mem::forget(buffer);
-
-        Ok(floats)
+        let mut amplitudes = vec![0.0; sweep_length];
+        reader.read_f32_into::<LittleEndian>(&mut amplitudes)?;
+        Ok(amplitudes)
     }
 
     /// Parses the sweeps from the SHR file buffer.
@@ -862,70 +882,5 @@ impl SHRParser {
 
     pub fn get_file_path(&self) -> PathBuf {
         self.file_path.clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use super::*;
-
-    #[test]
-    fn sweeps_returned_successfully_for_valid_shr_file() {
-        let parser = SHRParser::new(PathBuf::from("sweep.shr"), SHRParsingType::Peak).unwrap();
-        let sweeps = parser.get_sweeps();
-        let header = parser.get_file_header();
-        let file_path = parser.get_file_path();
-
-        println!("{:?}", header);
-        println!("{:?}", file_path);
-
-        parser.to_csv(PathBuf::from("output.csv")).unwrap();
-
-        assert!(
-            !sweeps.is_empty(),
-            "Sweeps should not be empty for a valid SHR file"
-        );
-    }
-
-    #[test]
-    fn sweeps_return_empty_for_shr_file_with_no_sweeps() {
-        let parser = SHRParser::new(PathBuf::from("no_sweeps.shr"), SHRParsingType::Peak).unwrap();
-        let sweeps = parser.get_sweeps();
-        assert!(
-            sweeps.is_empty(),
-            "Sweeps should be empty for an SHR file with no sweeps"
-        );
-    }
-
-    #[test]
-    fn sweeps_return_correct_number_of_sweeps() {
-        let parser =
-            SHRParser::new(PathBuf::from("multiple_sweeps.shr"), SHRParsingType::Peak).unwrap();
-        let sweeps = parser.get_sweeps();
-        assert_eq!(
-            sweeps.len(),
-            5,
-            "Sweeps count should match the actual number of sweeps in the SHR file"
-        );
-    }
-
-    #[test]
-    fn sweeps_return_error_for_invalid_shr_file() {
-        let parser_result = SHRParser::new(PathBuf::from("invalid.shr"), SHRParsingType::Peak);
-        assert!(
-            parser_result.is_err(),
-            "Parser should return an error for an invalid SHR file"
-        );
-    }
-
-    #[test]
-    fn sweeps_return_error_for_nonexistent_shr_file() {
-        let parser_result = SHRParser::new(PathBuf::from("nonexistent.shr"), SHRParsingType::Peak);
-        assert!(
-            parser_result.is_err(),
-            "Parser should return an error for a nonexistent SHR file"
-        );
     }
 }

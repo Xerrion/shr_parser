@@ -10,6 +10,7 @@ high performance and scalability.
 - **Parse SHR Files:** Read and interpret SHR files, including headers and sweeps.
 - **Validate Files:** Ensure the integrity of SHR files by validating signatures and versions.
 - **Sweep Metrics Calculation:** Compute key metrics such as peak, mean, and low values from sweep data.
+- **Full Sweep Data:** Access every frequency/amplitude pair in each sweep, regardless of the selected summary metric.
 - **Serialization & Deserialization:** Utilize Serde for seamless serialization and deserialization of SHR data.
 - **CSV Export:** Export parsed SHR data to CSV format for easy analysis and reporting.
 
@@ -41,6 +42,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+### Access all frequency/amplitude pairs
+
+Each sweep retains all bins in `data`. Use `get_data()` to borrow the points without
+copying them. Iterate over `parser.shr_file.sweeps` by reference to avoid the clones
+performed by `parser.get_sweeps()`:
+
+```rust,no_run
+use std::path::PathBuf;
+use shr_parser::{SHRParser, SHRParsingType};
+
+fn main() -> Result<(), shr_parser::SHRFileError> {
+    let parser = SHRParser::new(PathBuf::from("recording.shr"), SHRParsingType::Peak)?;
+
+    for sweep in &parser.shr_file.sweeps {
+        for point in sweep.get_data() {
+            println!("{}, {}, {}", sweep.number, point.frequency_hz, point.amplitude);
+        }
+    }
+    Ok(())
+}
+```
+
+`frequency_hz` is calculated as `first_bin_freq_hz + bin_index * bin_size_hz`.
+Amplitudes preserve the file's `f32` values in its reference scale (dBm or mV).
+The existing `frequency` (MHz) and `amplitude` fields still contain the selected
+Peak, Mean, or Low summary. `to_str()` and `to_csv()` still export summaries only.
+
+Retaining all points increases memory use in proportion to the total number of
+bins. Serialized sweeps now include `data`; older serialized sweeps without this
+field deserialize with an empty `data` vector. Code that constructs `SHRSweep`
+with a struct literal must supply `data` (or use `SHRSweep::new`).
 
 ## Documentation
 
