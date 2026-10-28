@@ -116,6 +116,9 @@ that the tag matches the package version, runs CI, verifies the crate package,
 publishes to crates.io, and creates a GitHub release with generated notes and the
 `.crate` archive. Tags with a prerelease suffix create GitHub prereleases.
 
+The `tests/` directory and its fixture remain in the repository but are excluded
+from the published crate package.
+
 To release:
 
 1. Configure a Trusted Publisher for `shr_parser` on crates.io with repository
